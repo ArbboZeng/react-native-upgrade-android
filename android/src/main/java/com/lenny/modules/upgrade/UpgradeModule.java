@@ -33,6 +33,9 @@ import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
 
+import java.util.Timer;
+import java.util.TimerTask;
+
 /**
  * Created by lenny on 2017/1/1.
  */
@@ -45,6 +48,9 @@ public class UpgradeModule extends ReactContextBaseJavaModule {
     private final int DOWNLOADFAIL = 77;
     private int contentLength;//要下载文件的大小
     private  ProgressDataReceiver progressReceiver;
+    private  Timer mTimer;
+    private  MyTimerTask mTimerTask;
+    private  static long mLastActionTime;
     private Handler handler = new Handler(Looper.getMainLooper()){
 
         public void handleMessage(Message msg) {
@@ -58,17 +64,18 @@ public class UpgradeModule extends ReactContextBaseJavaModule {
                     break;
                 case DOWNLOADFINISHED://下载完成后进行的操作
                     sendReceiver("0002", contentLength + "", contentLength);
-                    showToast("下载成功，跳转安装...");
+                    showToast("Download successful, jump install...");
                     InstallAPK((String) msg.obj);
                     break;
                 case DOWNLOADFAIL:
-                    showToast("访问服务器失败");
+                    showToast("Access server failed");
                 default:
                     break;
             }
         };
     };
 
+    
     public UpgradeModule(ReactApplicationContext reactContext) {
         super(reactContext);
     }
@@ -94,7 +101,7 @@ public class UpgradeModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void startDownLoad(final String downloadUrl,String version, String fileName) {
         if (!isSDcardExist()) {
-            showToast("SD卡不存在，下载失败");
+            showToast("SD card does not exist, download failed");
             return;
         }
 //        final String downloadUrl = "http://www.online-cmcc.com/gfms/app/apk/4GTraffic2MM.apk";
@@ -103,7 +110,7 @@ public class UpgradeModule extends ReactContextBaseJavaModule {
             InstallAPK(filePath);
             return;
         }
-        showToast("下载开始");
+        showToast("Download start");
         new Thread(){
             private InputStream inputStream;
             private FileOutputStream fos;
@@ -256,8 +263,40 @@ public class UpgradeModule extends ReactContextBaseJavaModule {
                 params.putString("downSize", intent.getStringExtra("currLength"));
                 params.putInt("fileSize", intent.getIntExtra("fileLength", 0));
                 getReactApplicationContext().getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
-                        .emit("progress", params);;
+                        .emit("progress", params);
             }
         }
+    }
+
+    @ReactMethod
+    public void startTimer() {
+        // Toast.makeText(getReactApplicationContext(), "startTimer", Toast.LENGTH_LONG).show();
+        mTimer = new Timer();
+        mTimerTask = new MyTimerTask();
+        mLastActionTime = System.currentTimeMillis();
+        mTimer.schedule(mTimerTask, 0, 1000);
+    }
+
+    @ReactMethod
+    public void stopTimer() {
+        // Toast.makeText(getReactApplicationContext(), "stopTimer", Toast.LENGTH_SHORT).show();
+        mTimer.cancel();
+    }
+
+    private class MyTimerTask extends TimerTask {
+        @Override
+        public void run() {
+            if (System.currentTimeMillis() - mLastActionTime > 1000 * 60 * 5) {
+                WritableMap params = Arguments.createMap();
+                params.putString("status", "AutoLock");
+                getReactApplicationContext().getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+                        .emit("autolock", params);
+            }
+        }
+    }
+
+    public static void userOperate(Context context){
+        mLastActionTime = System.currentTimeMillis();
+        // Toast.makeText(context, "userOperate", Toast.LENGTH_SHORT).show();
     }
 }
